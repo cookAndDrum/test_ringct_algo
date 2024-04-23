@@ -74,11 +74,25 @@ int main() {
     cout << "Scalar operation on r * pkV_b fail" << endl;
 
   // 2.1 Hn (r_pkV_b)
+  unsigned char hn_r_pkV_b[crypto_core_ed25519_SCALARBYTES];
+  hash_to_scalar(hn_r_pkV_b, r_pkV_b, crypto_core_ed25519_SCALARBYTES);
+  cout << "Length of the ed25519 scalarbyte: " << crypto_core_ed25519_SCALARBYTES << endl;
+  // 2.2 scalar multiplication
+  unsigned char G_hn_r_pkV_b[crypto_core_ed25519_SCALARBYTES];
+  is_success = crypto_scalarmult_ed25519_base_noclamp(G_hn_r_pkV_b, hn_r_pkV_b);
+  if (is_success != 0)
+    cout << "Scalar operation of G with hash scalar fails" << endl;
+
+  //3 point addition of Hn*G and pkS_b
+  unsigned char one_time_key_address[crypto_core_ed25519_BYTES];
+  is_success = crypto_core_ed25519_add(one_time_key_address, G_hn_r_pkV_b, pkS_b);
+  if (is_success != 0)
+    cout << "Point addition for one time address fail due to invalid point" << endl;
+
 
   // test
   // test if r * skV_b * G == r * pkV_b
   unsigned char test_pkV_b[crypto_sign_PUBLICKEYBYTES];
-
   cout << "lenght of secret key byte: " << crypto_sign_SECRETKEYBYTES <<endl;
 
   unsigned char copied_pkV_b_from_sk[crypto_sign_ed25519_PUBLICKEYBYTES];

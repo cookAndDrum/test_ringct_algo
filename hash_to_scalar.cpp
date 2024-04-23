@@ -24,9 +24,10 @@ void fill_seed(int val, unsigned char *seed, size_t n) {
     seed[i] = val;
 }
 
-// to test if the operation is correct (of the libsodium) 
-// extract the seed from sk, sk (64 byte) is composed of first 32byte as seed, next 32 byte as pk
-void extract_scalar_from_sk (unsigned char* scalar, const unsigned char* seed) {
+// to test if the operation is correct (of the libsodium)
+// extract the seed from sk, sk (64 byte) is composed of first 32byte as seed,
+// next 32 byte as pk
+void extract_scalar_from_sk(unsigned char *scalar, const unsigned char *seed) {
   crypto_hash_sha512(scalar, seed, 32);
   scalar[0] &= 248;
   scalar[31] &= 127;
@@ -53,15 +54,19 @@ int main() {
   fill_seed(2, seed_2, crypto_sign_ed25519_SEEDBYTES);
 
   // recipient info
-  // the secretkeybyte is 64 bytes long, the first 32 byte is replaced with seed and the next 32 byte is replaced with public key
+  // the secretkeybyte is 64 bytes long, the first 32 byte is replaced with seed
+  // and the next 32 byte is replaced with public key
   unsigned char skV_b[crypto_sign_SECRETKEYBYTES];
   unsigned char pkV_b[crypto_sign_PUBLICKEYBYTES];
   unsigned char skS_b[crypto_sign_SECRETKEYBYTES];
   unsigned char pkS_b[crypto_sign_PUBLICKEYBYTES];
 
-  crypto_sign_seed_keypair(pkS_b, skS_b, seed_1);
-  crypto_sign_seed_keypair(pkV_b, skV_b, seed_2); // the proper way is use hash_to_scalar
-                                     // calculate the skV_b from skS_b
+  //crypto_sign_seed_keypair(pkS_b, skS_b, seed_1);
+  //crypto_sign_seed_keypair(pkV_b, skV_b,
+  //                        seed_2); // the proper way is use hash_to_scalar
+                                    // calculate the skV_b from skS_b
+  crypto_sign_keypair(pkS_b, skS_b);
+  crypto_sign_keypair(pkV_b, skV_b);
 
   // 1. sender pick random r
   unsigned char r[crypto_core_ed25519_SCALARBYTES];
@@ -76,30 +81,35 @@ int main() {
   // 2.1 Hn (r_pkV_b)
   unsigned char hn_r_pkV_b[crypto_core_ed25519_SCALARBYTES];
   hash_to_scalar(hn_r_pkV_b, r_pkV_b, crypto_core_ed25519_SCALARBYTES);
-  cout << "Length of the ed25519 scalarbyte: " << crypto_core_ed25519_SCALARBYTES << endl;
+  cout << "Length of the ed25519 scalarbyte: "
+       << crypto_core_ed25519_SCALARBYTES << endl;
   // 2.2 scalar multiplication
   unsigned char G_hn_r_pkV_b[crypto_core_ed25519_SCALARBYTES];
   is_success = crypto_scalarmult_ed25519_base_noclamp(G_hn_r_pkV_b, hn_r_pkV_b);
   if (is_success != 0)
     cout << "Scalar operation of G with hash scalar fails" << endl;
 
-  //3 point addition of Hn*G and pkS_b
+  // 3 point addition of Hn*G and pkS_b
   unsigned char one_time_key_address[crypto_core_ed25519_BYTES];
-  is_success = crypto_core_ed25519_add(one_time_key_address, G_hn_r_pkV_b, pkS_b);
+  is_success =
+      crypto_core_ed25519_add(one_time_key_address, G_hn_r_pkV_b, pkS_b);
   if (is_success != 0)
-    cout << "Point addition for one time address fail due to invalid point" << endl;
+    cout << "Point addition for one time address fail due to invalid point"
+         << endl;
 
-
+  ////////////////////////////////////////////////////////////////////////////
   // test
   // test if r * skV_b * G == r * pkV_b
   unsigned char test_pkV_b[crypto_sign_PUBLICKEYBYTES];
-  cout << "lenght of secret key byte: " << crypto_sign_SECRETKEYBYTES <<endl;
+  cout << "lenght of secret key byte: " << crypto_sign_SECRETKEYBYTES << endl;
 
   unsigned char copied_pkV_b_from_sk[crypto_sign_ed25519_PUBLICKEYBYTES];
   unsigned char scalar_skV_b[32];
   unsigned char copied_seed_skV_b[crypto_sign_ed25519_SEEDBYTES];
-  memcpy(copied_pkV_b_from_sk, skV_b + crypto_sign_ed25519_SEEDBYTES, 32); // clone the pk from sk
-  memcpy(copied_seed_skV_b, skV_b, crypto_sign_ed25519_SEEDBYTES); // clone the pk from sk
+  memcpy(copied_pkV_b_from_sk, skV_b + crypto_sign_ed25519_SEEDBYTES,
+         32); // clone the pk from sk
+  memcpy(copied_seed_skV_b, skV_b,
+         crypto_sign_ed25519_SEEDBYTES); // clone the pk from sk
   extract_scalar_from_sk(scalar_skV_b, copied_seed_skV_b); // extract the sk
 
   crypto_scalarmult_ed25519_base(test_pkV_b, scalar_skV_b);
@@ -121,6 +131,109 @@ int main() {
   for (unsigned char c : test_pkV_b)
     cout << hex << int(c);
   cout << dec << endl;
+
+  cout << "===============================" << endl;
+
+  // test if K_o - Hn(rG*skV_b) * G = pkS_b
+  unsigned char rG[crypto_core_ed25519_BYTES]; // given by the sender
+  crypto_scalarmult_ed25519_base_noclamp(rG, r);
+
+  unsigned char rG_skV_b[crypto_core_ed25519_BYTES];
+  is_success = crypto_scalarmult_ed25519(rG_skV_b, scalar_skV_b, rG);
+  if (is_success != 0)
+    cout << "Scalar operation failure in rG_skV_b." << endl;
+
+  cout << "Test for r_pkV_b: " << endl;
+  for (unsigned char c : r_pkV_b)
+    cout << hex << int(c);
+  cout << endl;
+
+  cout << "Test for rG_skV_b: " << endl;
+  for (unsigned char c : rG_skV_b)
+    cout << hex << int(c);
+  cout << dec << endl;
+
+  if (memcmp(r_pkV_b, rG_skV_b, crypto_core_ed25519_BYTES) == 0)
+    cout << "The scalar output are equal " << endl;
+  else
+    cout << "The scalar output are not equal. " << endl;
+
+  unsigned char hn_rG_skV_b[crypto_core_ed25519_SCALARBYTES];
+  hash_to_scalar(hn_rG_skV_b, rG_skV_b, crypto_core_ed25519_SCALARBYTES);
+  unsigned char G_hn_rG_skV_b[crypto_core_ed25519_BYTES];
+  is_success = crypto_scalarmult_ed25519_base_noclamp(G_hn_rG_skV_b, hn_rG_skV_b);
+  if (is_success != 0)
+    cout << "Scalar operation failure in rG_skV_b." << endl;
+
+  if (memcmp(G_hn_r_pkV_b, G_hn_rG_skV_b, crypto_core_ed25519_BYTES) == 0)
+    cout << "The scalar mult on Hn is equal " << endl;
+  else
+    cout << "The scalar mult on Hn is not equal. " << endl;
+  
+  unsigned char test_pkV_b_subtract[crypto_core_ed25519_BYTES];
+  crypto_core_ed25519_sub(test_pkV_b_subtract, one_time_key_address, G_hn_rG_skV_b);
+  
+  cout << "Test for pkS_b: " << endl;
+  for (unsigned char c : pkS_b)
+    cout << hex << int(c);
+  cout << endl;
+
+  cout << "Test for test_pkV_b_subtract from one time key address: " << endl;
+  for (unsigned char c : test_pkV_b_subtract)
+    cout << hex << int(c);
+  cout << endl;
+
+  if (memcmp(pkS_b, test_pkV_b_subtract, crypto_core_ed25519_BYTES) == 0)
+    cout << "The public spending key compare is equal " << endl;
+  else
+    cout << "The public spending key is not equal. " << endl;
+
+  cout << "===============================" << endl;
+
+  // test from sender generated subtraction
+  unsigned char test_one_time_key_sub_sender[crypto_core_ed25519_BYTES];
+  crypto_core_ed25519_sub(test_one_time_key_sub_sender, one_time_key_address, G_hn_r_pkV_b);
+  
+  cout << "Test for sender side one time key address subtraction: " << endl;
+  for (unsigned char c : test_one_time_key_sub_sender)
+    cout << hex << int(c);
+  cout << dec << endl;
+
+  if (memcmp(test_one_time_key_sub_sender, pkS_b, crypto_core_ed25519_BYTES) == 0) 
+    cout << "Sender side sub is exactly same as pkS_b" <<endl;
+  else
+    cout << "Sender side sub is different as pkS_b" <<endl;
+
+  cout << "===============================" << endl;
+
+  // test receiver compute secret key for one time address
+  // how to add up two scalar together ??
+  unsigned char one_time_address_secret_key[crypto_core_ed25519_SCALARBYTES];
+  unsigned char copied_seed_skS_b[crypto_sign_ed25519_SEEDBYTES];
+  unsigned char scalar_skS_b[crypto_core_ed25519_SCALARBYTES];
+  memcpy(copied_seed_skS_b, skS_b,
+         crypto_sign_ed25519_SEEDBYTES); // clone the pk from sk
+  extract_scalar_from_sk(scalar_skS_b, copied_seed_skS_b); // extract the sk
+  crypto_core_ed25519_scalar_add(one_time_address_secret_key, scalar_skS_b, hn_rG_skV_b);
+
+  // test is same one time key address
+  unsigned char test_one_time_key_address[crypto_core_ed25519_BYTES];
+  crypto_scalarmult_ed25519_base_noclamp(test_one_time_key_address, one_time_address_secret_key);
+
+  cout << "Test for one time key address: " << endl;
+  for (unsigned char c : one_time_key_address)
+    cout << hex << int(c);
+  cout << endl;
+
+  cout << "Test for computed one time key from secret key: " << endl;
+  for (unsigned char c : test_one_time_key_address)
+    cout << hex << int(c);
+  cout << endl;
+
+  if (memcmp(one_time_key_address, test_one_time_key_address, crypto_core_ed25519_BYTES) == 0)
+    cout << "The one time key address compare is equal " << endl;
+  else
+    cout << "The one time key address is not equal. " << endl;
 
   return 0;
 }

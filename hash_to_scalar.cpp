@@ -19,7 +19,7 @@ using namespace std;
 void to_string(string *output, unsigned char *key, size_t n) {
   ostringstream oss;
   for (size_t i = 0; i < n; i++) {
-    oss << hex << int(key[i]);
+    oss << hex << setw(2) << setfill('0') << int(key[i]);
   }
 }
 

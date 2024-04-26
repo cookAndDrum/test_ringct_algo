@@ -1,5 +1,9 @@
+#include <cstdio>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
+#include <openssl/bn.h>
+#include <openssl/ossl_typ.h>
 #include <sodium.h>
 #include <sodium/core.h>
 #include <sodium/crypto_core_ed25519.h>
@@ -61,10 +65,10 @@ int main() {
   unsigned char skS_b[crypto_sign_SECRETKEYBYTES];
   unsigned char pkS_b[crypto_sign_PUBLICKEYBYTES];
 
-  //crypto_sign_seed_keypair(pkS_b, skS_b, seed_1);
-  //crypto_sign_seed_keypair(pkV_b, skV_b,
-  //                        seed_2); // the proper way is use hash_to_scalar
-                                    // calculate the skV_b from skS_b
+  // crypto_sign_seed_keypair(pkS_b, skS_b, seed_1);
+  // crypto_sign_seed_keypair(pkV_b, skV_b,
+  //                         seed_2); // the proper way is use hash_to_scalar
+  //  calculate the skV_b from skS_b
   crypto_sign_keypair(pkS_b, skS_b);
   crypto_sign_keypair(pkV_b, skV_b);
 
@@ -161,7 +165,8 @@ int main() {
   unsigned char hn_rG_skV_b[crypto_core_ed25519_SCALARBYTES];
   hash_to_scalar(hn_rG_skV_b, rG_skV_b, crypto_core_ed25519_SCALARBYTES);
   unsigned char G_hn_rG_skV_b[crypto_core_ed25519_BYTES];
-  is_success = crypto_scalarmult_ed25519_base_noclamp(G_hn_rG_skV_b, hn_rG_skV_b);
+  is_success =
+      crypto_scalarmult_ed25519_base_noclamp(G_hn_rG_skV_b, hn_rG_skV_b);
   if (is_success != 0)
     cout << "Scalar operation failure in rG_skV_b." << endl;
 
@@ -169,10 +174,11 @@ int main() {
     cout << "The scalar mult on Hn is equal " << endl;
   else
     cout << "The scalar mult on Hn is not equal. " << endl;
-  
+
   unsigned char test_pkV_b_subtract[crypto_core_ed25519_BYTES];
-  crypto_core_ed25519_sub(test_pkV_b_subtract, one_time_key_address, G_hn_rG_skV_b);
-  
+  crypto_core_ed25519_sub(test_pkV_b_subtract, one_time_key_address,
+                          G_hn_rG_skV_b);
+
   cout << "Test for pkS_b: " << endl;
   for (unsigned char c : pkS_b)
     cout << hex << int(c);
@@ -192,17 +198,19 @@ int main() {
 
   // test from sender generated subtraction
   unsigned char test_one_time_key_sub_sender[crypto_core_ed25519_BYTES];
-  crypto_core_ed25519_sub(test_one_time_key_sub_sender, one_time_key_address, G_hn_r_pkV_b);
-  
+  crypto_core_ed25519_sub(test_one_time_key_sub_sender, one_time_key_address,
+                          G_hn_r_pkV_b);
+
   cout << "Test for sender side one time key address subtraction: " << endl;
   for (unsigned char c : test_one_time_key_sub_sender)
     cout << hex << int(c);
   cout << dec << endl;
 
-  if (memcmp(test_one_time_key_sub_sender, pkS_b, crypto_core_ed25519_BYTES) == 0) 
-    cout << "Sender side sub is exactly same as pkS_b" <<endl;
+  if (memcmp(test_one_time_key_sub_sender, pkS_b, crypto_core_ed25519_BYTES) ==
+      0)
+    cout << "Sender side sub is exactly same as pkS_b" << endl;
   else
-    cout << "Sender side sub is different as pkS_b" <<endl;
+    cout << "Sender side sub is different as pkS_b" << endl;
 
   cout << "===============================" << endl;
 
@@ -214,11 +222,13 @@ int main() {
   memcpy(copied_seed_skS_b, skS_b,
          crypto_sign_ed25519_SEEDBYTES); // clone the pk from sk
   extract_scalar_from_sk(scalar_skS_b, copied_seed_skS_b); // extract the sk
-  crypto_core_ed25519_scalar_add(one_time_address_secret_key, scalar_skS_b, hn_rG_skV_b);
+  crypto_core_ed25519_scalar_add(one_time_address_secret_key, scalar_skS_b,
+                                 hn_rG_skV_b);
 
   // test is same one time key address
   unsigned char test_one_time_key_address[crypto_core_ed25519_BYTES];
-  crypto_scalarmult_ed25519_base_noclamp(test_one_time_key_address, one_time_address_secret_key);
+  crypto_scalarmult_ed25519_base_noclamp(test_one_time_key_address,
+                                         one_time_address_secret_key);
 
   cout << "Test for one time key address: " << endl;
   for (unsigned char c : one_time_key_address)
@@ -230,10 +240,114 @@ int main() {
     cout << hex << int(c);
   cout << endl;
 
-  if (memcmp(one_time_key_address, test_one_time_key_address, crypto_core_ed25519_BYTES) == 0)
+  if (memcmp(one_time_key_address, test_one_time_key_address,
+             crypto_core_ed25519_BYTES) == 0)
     cout << "The one time key address compare is equal " << endl;
   else
     cout << "The one time key address is not equal. " << endl;
+
+  cout << "===============================" << endl;
+  unsigned char test_hn_rG_skV_b[crypto_core_ed25519_SCALARBYTES];
+  crypto_core_ed25519_scalar_sub(test_hn_rG_skV_b, one_time_address_secret_key, scalar_skS_b);
+
+  cout << "test the scalar sub of lsodium : one time address secret key - scalar_skS_b" << endl;
+  for (unsigned char c : test_hn_rG_skV_b)
+    cout << hex << setw(2) << setfill('0') << int(c);
+  cout << endl;
+  for (unsigned char c : hn_rG_skV_b)
+    cout << hex << setw(2) << setfill('0') << int(c);
+  cout << endl;
+
+  cout << "===============================" << endl;
+  unsigned char A[crypto_core_ed25519_SCALARBYTES];
+  unsigned char B[crypto_core_ed25519_SCALARBYTES];
+  unsigned char C[crypto_core_ed25519_SCALARBYTES];
+  crypto_core_ed25519_scalar_random(B);
+  crypto_core_ed25519_scalar_random(C);
+  crypto_core_ed25519_scalar_add(A, B, C);
+  cout << "test the scalar sub of lsodium : non-reduced random byte(suppose reduce beforehand) " << endl;
+  unsigned char test_C[crypto_core_ed25519_SCALARBYTES];
+  crypto_core_ed25519_scalar_add(test_C, A, B);
+
+  cout << "C " << endl;
+  for (unsigned char c : C)
+    cout << hex << setw(2) << setfill('0') << int(c);
+  cout << endl;
+  cout << "test_C " << endl;
+  for (unsigned char c : test_C)
+    cout << hex << setw(2) << setfill('0') << int(c);
+  cout << endl;
+  
+  cout << "test the scalar sub of lsodium : reduced random byte " << endl;
+  unsigned char reduce_A[crypto_core_ed25519_SCALARBYTES];
+  unsigned char reduce_B[crypto_core_ed25519_SCALARBYTES];
+  unsigned char reduce_C[crypto_core_ed25519_SCALARBYTES];
+  unsigned char reduce_reduce_C[crypto_core_ed25519_SCALARBYTES];
+  crypto_core_ed25519_scalar_reduce(reduce_B, B);
+  crypto_core_ed25519_scalar_reduce(reduce_C, C);
+  crypto_core_ed25519_scalar_reduce(reduce_reduce_C, reduce_C);
+
+  cout << "reduce C " << endl;
+  for (unsigned char c : reduce_C)
+    cout << hex << setw(2) << setfill('0') << int(c);
+  cout << endl;
+
+
+  cout << "===============================" << endl;
+
+  // test the scalar add of libsodium and openssl would result the same stealth
+  // address secret key
+  BIGNUM *o_scalar_skS_b = BN_new();
+  BIGNUM *o_hn_rG_skV_b = BN_new();
+  BIGNUM *order = BN_new();
+  BN_CTX *ctx = BN_CTX_new();
+  BN_hex2bn(&order,
+            "1000000000000000000000000000000013E974E72F8A6922031D2603CFE0D7");
+
+  BN_bin2bn(scalar_skS_b, 32, o_scalar_skS_b);
+  BN_bin2bn(hn_rG_skV_b, 32, o_hn_rG_skV_b);
+
+  // test if the conversion between lsodium and openssl correct
+  char *o_scalar_skS_b_hex = BN_bn2hex(o_scalar_skS_b);
+  char *o_hn_rG_skV_b_hex = BN_bn2hex(o_hn_rG_skV_b);
+  cout << "o_scalar_skS_b_hex " << endl;
+  cout << o_scalar_skS_b_hex << endl;
+
+  cout << "scalar_skS_b from lsodium" << endl;
+  for (unsigned char c : scalar_skS_b)
+    cout << hex << setw(2) << setfill('0') << int(c);
+  cout << endl;
+
+  cout << "o_hn_rG_skV_b_hex " << endl;
+  cout << o_hn_rG_skV_b_hex << endl;
+
+  cout << "hn_rG_skV_b from lsodium" << endl;
+  for (unsigned char c : hn_rG_skV_b)
+    cout << hex << setw(2) << setfill('0') << int(c);
+  cout << endl;
+
+  // test addition
+  //crypto_core_ed25519_scalar_add(one_time_address_secret_key, scalar_skS_b,
+  //                               hn_rG_skV_b);
+  BIGNUM *o_one_time_secret_key = BN_new();
+  BN_mod_add(o_one_time_secret_key, o_scalar_skS_b, o_hn_rG_skV_b, order, ctx);
+  char *o_one_time_secret_key_hex = BN_bn2hex(o_one_time_secret_key);
+  cout << "o_one_time_secret_key_hex " << endl;
+  cout << o_one_time_secret_key_hex  << endl;
+
+  cout << "one time secret key from lsodium" << endl;
+  for (unsigned char c : one_time_address_secret_key)
+    cout << hex << setw(2) << setfill('0') << int(c);
+  cout << endl;
+
+  delete[] o_hn_rG_skV_b_hex;
+  delete[] o_scalar_skS_b_hex;
+  delete[] o_one_time_secret_key_hex;
+  BN_free(o_scalar_skS_b);
+  BN_free(o_hn_rG_skV_b);
+  BN_free(order);
+  BN_free(o_one_time_secret_key);
+  BN_CTX_free(ctx);
 
   return 0;
 }

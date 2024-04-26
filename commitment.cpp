@@ -6,6 +6,7 @@
 #include <sodium/crypto_core_ed25519.h>
 #include <sodium/crypto_generichash.h>
 #include <sodium/crypto_scalarmult_ed25519.h>
+#include <sodium/utils.h>
 
 #define H_String        \
   ((const unsigned char \
@@ -13,6 +14,34 @@
 #define H_Len 61
 
 using namespace std;
+
+void to_string(string *output, unsigned char *key, size_t n) {
+  ostringstream oss;
+  for (size_t i = 0; i < n; i++) {
+    oss << hex << setw(2) << setfill('0') << int(key[i]);
+  }
+}
+
+void print_hex(const unsigned char *key, size_t n) {
+  for (size_t i = 0; i < n; i++) {
+    cout << hex << setw(2) << setfill('0') << int(key[i]);
+  }
+  cout << endl;
+}
+
+void compare_byte(const unsigned char *a, const unsigned char *b, size_t n) {
+  if (memcmp(a, b, n) == 0)
+    cout << "Both byte strings equal" << endl;
+  else
+    cout << "WARNING>> Both byte strings are not equal" << endl;
+}
+
+// TODO need to implement this for input and output value (in 64 bit == 8 byte)
+void int_to_scalar_byte(unsigned char* out, int input) {
+  memset(out, 0, crypto_core_ed25519_SCALARBYTES);
+  //sodium_bin2hex(out, crypto_core_ed25519_SCALARBYTES, (const unsigned char*)&input, sizeof(input));
+  //s
+}
 
 void generate_H(unsigned char *H)
 {
@@ -50,7 +79,7 @@ void add_key(unsigned char *aGbH, unsigned char *a, unsigned char *b,
     cout << "point addition aG + bH fail due to invalid points" << endl;
 }
 
-void scenario_1(const unsigned char *H)
+void scenario_1(const unsigned char* H)
 {
   // Scenario 1 : sender got one input, 2 output (ignore pseudo out for now)
   int input_1 = 10; // sender input
@@ -58,41 +87,50 @@ void scenario_1(const unsigned char *H)
   int change = 8;   // sender's change
 
   // sender side
-  unsigned char a[crypto_core_ed25519_SCALARBYTES];
-  unsigned char b1[crypto_core_ed25519_SCALARBYTES];
-  unsigned char b2[crypto_core_ed25519_SCALARBYTES];
+  unsigned char x[crypto_core_ed25519_SCALARBYTES];
+  unsigned char y1[crypto_core_ed25519_SCALARBYTES];
+  unsigned char y2[crypto_core_ed25519_SCALARBYTES];
+  crypto_core_ed25519_scalar_random(y1);
+  crypto_core_ed25519_scalar_random(y2); // random scalar
+  // a = b1 + b2
+  crypto_core_ed25519_scalar_add(x, y2, y1);
 
-  crypto_core_ed25519_random(b1);
-  crypto_core_ed25519_random(b2); // random scalar
-  crypto_core_ed25519_scalar_add(a, b2, b1);
+  // test a = b1 + b2 mod l
+  unsigned char test_y1[crypto_core_ed25519_SCALARBYTES];
+  crypto_core_ed25519_scalar_sub(test_y1, x, y2);
+  cout << "y1 hex : " << endl;
+  print_hex(y1, crypto_core_ed25519_SCALARBYTES);
+  cout << "test_y1 hex : " << endl;
+  print_hex(test_y1, crypto_core_ed25519_SCALARBYTES);
+  compare_byte(y1, test_y1, crypto_core_ed25519_SCALARBYTES);
+  cout << "==========================================" << endl;
 
-  // test a = b1 + b2
-  unsigned char test_b1[crypto_core_ed25519_SCALARBYTES];
-  crypto_core_ed25519_scalar_sub(test_b1, a, b2);
+  //compute commitment
+  // check if xG = y1G + y2G
+  unsigned char xG[crypto_core_ed25519_BYTES];
+  unsigned char y1G[crypto_core_ed25519_BYTES];
+  unsigned char y2G[crypto_core_ed25519_BYTES];
+  unsigned char y1G_y2G[crypto_core_ed25519_BYTES];
+  crypto_scalarmult_ed25519_base_noclamp(xG, x); // using noclamp as not missing any bit
+  crypto_scalarmult_ed25519_base_noclamp(y1G, y1); // using noclamp as not missing any bit
+  crypto_scalarmult_ed25519_base_noclamp(y2G, y2); // using noclamp as not missing any bit
+  
+  crypto_core_ed25519_add(y1G_y2G, y1G, y2G);
+  cout << "xG hex : " << endl;
+  print_hex(xG, crypto_core_ed25519_BYTES);
+  cout << "y1G + y2G hex : " << endl;
+  print_hex(y1G_y2G, crypto_core_ed25519_BYTES);
+  compare_byte(xG, y1G_y2G, crypto_core_ed25519_SCALARBYTES);
 
-  cout << "scalar byte length in byte : " << crypto_core_ed25519_SCALARBYTES
-       << endl;
+  // check if aH = b1H + b2H
+  unsigned char aH[crypto_core_ed25519_BYTES];
+  unsigned char b1H[crypto_core_ed25519_BYTES];
+  unsigned char b2H[crypto_core_ed25519_BYTES];
+  unsigned char b1_b2H[crypto_core_ed25519_BYTES];
+  crypto_scalarmult_ed25519_noclamp(aH, H, input_1); // using noclamp as not missing any bit
+  crypto_scalarmult_ed25519_base_noclamp(y1G, y1); // using noclamp as not missing any bit
+  crypto_scalarmult_ed25519_base_noclamp(y2G, y2); // using noclamp as not missing any bit
 
-  cout << "a hex : " << endl;
-  for (unsigned char c : b1)
-    cout << hex << setw(2) << setfill('0') << int(c);
-  cout << endl;
-  cout << "test_a hex : " << endl;
-  for (unsigned char c : test_b1)
-    cout << hex << setw(2) << setfill('0') << int(c);
-  cout << dec << endl;
-
-  if (memcmp(b1, test_b1, crypto_scalarmult_ed25519_SCALARBYTES) == 0)
-    cout << "a and test_a are equal" << endl;
-  else
-    cout << "a and test_a are not equal" << endl;
-}
-
-void print_hex(const unsigned char *key, size_t n)
-{
-  for (size_t i = 0; i < n; i++)
-    cout << hex << setw(2) << setfill('0') << int(key[i]);
-  cout << dec << endl;
 }
 
 int main()
@@ -102,28 +140,9 @@ int main()
 
   // generate H. H should be storing in the code base somewhere to reduce
   // overhead
-  unsigned char H[crypto_core_ed25519_BYTES]; // suppose to store this
+  unsigned char H[crypto_core_ed25519_BYTES]; // suppose to store this somewhere in code (hard coded)
   generate_H(H);
 
-  // scenario_1(H);
-
-  unsigned char a[crypto_core_ed25519_SCALARBYTES];
-  unsigned char b[crypto_core_ed25519_SCALARBYTES];
-  unsigned char c[crypto_core_ed25519_SCALARBYTES];
-
-  crypto_core_ed25519_random(a);
-  crypto_core_ed25519_random(b);
-
-  crypto_core_ed25519_scalar_sub(c, a, b);
-
-  print_hex(a, crypto_core_ed25519_SCALARBYTES);
-  print_hex(b, crypto_core_ed25519_SCALARBYTES);
-  print_hex(c, crypto_core_ed25519_SCALARBYTES);
-
-  // test
-  unsigned char test_a[crypto_core_ed25519_SCALARBYTES];
-  crypto_core_ed25519_scalar_add(test_a, c, b);
-  print_hex(test_a, crypto_core_ed25519_SCALARBYTES);
-
+  scenario_1();
   return 0;
 }

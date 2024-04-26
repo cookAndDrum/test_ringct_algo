@@ -88,39 +88,6 @@ void sender_compute_stealth_address_and_test(
          << endl;
 }
 
-void test_scalar_arithmetic() {
-  cout << "inside test scalar arithmetic " << endl;
-  unsigned char a[crypto_core_ed25519_BYTES];
-  unsigned char b[crypto_core_ed25519_BYTES];
-  unsigned char A[crypto_core_ed25519_SCALARBYTES];
-  unsigned char B[crypto_core_ed25519_SCALARBYTES];
-  unsigned char C[crypto_core_ed25519_SCALARBYTES];
-  unsigned char test_B[crypto_core_ed25519_SCALARBYTES];
-  crypto_core_ed25519_random(a);
-  crypto_core_ed25519_random(b);
-  hash_to_scalar(A, a, crypto_core_ed25519_SCALARBYTES);
-  hash_to_scalar(B, b, crypto_core_ed25519_SCALARBYTES);
-
-  // C = B + A mod l
-  crypto_core_ed25519_scalar_add(C, B, A);
-  // test_B = C - A mod l
-  crypto_core_ed25519_scalar_sub(test_B, C, A);
-
-  cout << "B: " << endl;
-  print_hex(B, crypto_core_ed25519_SCALARBYTES);
-  cout << "test_B: " << endl;
-  print_hex(test_B, crypto_core_ed25519_SCALARBYTES);
-  compare_byte(B, test_B, crypto_core_ed25519_SCALARBYTES);
-  cout << "==========================================" << endl;
-
-
-  unsigned char D[crypto_core_ed25519_SCALARBYTES];
-  unsigned char E[crypto_core_ed25519_SCALARBYTES];
-  unsigned char F[crypto_core_ed25519_SCALARBYTES];
-  crypto_core_ed25519_scalar_random(D);
-  crypto_core_ed25519_scalar_random(E);
-
-}
 
 void receiver_test_compute(const unsigned char *skV_b,
                            const unsigned char *pkV_b,
@@ -159,6 +126,49 @@ void receiver_test_compute(const unsigned char *skV_b,
   compare_byte(test_one_time_key_address, stealth_address, crypto_core_ed25519_BYTES);
 }
 
+void test_scalar_arithmetic() {
+  cout << "inside test scalar arithmetic " << endl;
+  unsigned char a[crypto_core_ed25519_BYTES];
+  unsigned char b[crypto_core_ed25519_BYTES];
+  unsigned char A[crypto_core_ed25519_SCALARBYTES];
+  unsigned char B[crypto_core_ed25519_SCALARBYTES];
+  unsigned char C[crypto_core_ed25519_SCALARBYTES];
+  unsigned char test_B[crypto_core_ed25519_SCALARBYTES];
+  crypto_core_ed25519_random(a);
+  crypto_core_ed25519_random(b);
+  hash_to_scalar(A, a, crypto_core_ed25519_SCALARBYTES);
+  hash_to_scalar(B, b, crypto_core_ed25519_SCALARBYTES);
+
+  // C = B + A mod l
+  crypto_core_ed25519_scalar_add(C, B, A);
+  // test_B = C - A mod l
+  crypto_core_ed25519_scalar_sub(test_B, C, A);
+
+  cout << "B: " << endl;
+  print_hex(B, crypto_core_ed25519_SCALARBYTES);
+  cout << "test_B: " << endl;
+  print_hex(test_B, crypto_core_ed25519_SCALARBYTES);
+  compare_byte(B, test_B, crypto_core_ed25519_SCALARBYTES);
+  cout << "==========================================" << endl;
+
+  unsigned char D[crypto_core_ed25519_SCALARBYTES];
+  unsigned char E[crypto_core_ed25519_SCALARBYTES];
+  unsigned char F[crypto_core_ed25519_SCALARBYTES];
+  unsigned char test_E[crypto_core_ed25519_SCALARBYTES];
+  crypto_core_ed25519_scalar_random(D);
+  crypto_core_ed25519_scalar_random(E);
+
+  // F = D + E mod l
+  crypto_core_ed25519_scalar_add(F, D, E);
+  // test_E = F - D mod l
+  crypto_core_ed25519_scalar_sub(test_E, F, D);
+
+  cout << "E: " << endl;
+  print_hex(E, crypto_core_ed25519_SCALARBYTES);
+  cout << "test_E: " << endl;
+  print_hex(test_E, crypto_core_ed25519_SCALARBYTES);
+  compare_byte(E, test_E, crypto_core_ed25519_SCALARBYTES);
+}
 
 int main() {
   if (sodium_init() == -1)

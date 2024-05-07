@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -36,11 +37,11 @@ void compare_byte(const unsigned char *a, const unsigned char *b, size_t n) {
     cout << "WARNING>> Both byte strings are not equal" << endl;
 }
 
-// TODO need to implement this for input and output value (in 64 bit == 8 byte)
-void int_to_scalar_byte(unsigned char* out, int input) {
-  memset(out, 0, crypto_core_ed25519_SCALARBYTES);
-  //sodium_bin2hex(out, crypto_core_ed25519_SCALARBYTES, (const unsigned char*)&input, sizeof(input));
-  //s
+// input long long is guaranteed at least 64bit == 8 byte, output in little endian
+void int_to_scalar_byte(unsigned char* out, long long input) {
+  memset(out, 0, crypto_core_ed25519_SCALARBYTES); // use 32 byte for now, if to use 8 byte, probably need to come up with own scalar multiplication funciton
+  // overflow if > 32 byte, but not possible 
+  memcpy(out,  &input, sizeof(input));
 }
 
 void generate_H(unsigned char *H)
@@ -127,10 +128,9 @@ void scenario_1(const unsigned char* H)
   unsigned char b1H[crypto_core_ed25519_BYTES];
   unsigned char b2H[crypto_core_ed25519_BYTES];
   unsigned char b1_b2H[crypto_core_ed25519_BYTES];
-  crypto_scalarmult_ed25519_noclamp(aH, H, input_1); // using noclamp as not missing any bit
-  crypto_scalarmult_ed25519_base_noclamp(y1G, y1); // using noclamp as not missing any bit
-  crypto_scalarmult_ed25519_base_noclamp(y2G, y2); // using noclamp as not missing any bit
-
+  //crypto_scalarmult_ed25519_noclamp(aH, H, input_1); // using noclamp as not missing any bit
+  //crypto_scalarmult_ed25519_noclamp(b1H, H, output_1); // using noclamp as not missing any bit
+  //crypto_scalarmult_ed25519_noclamp(b2H, H, change); // using noclamp as not missing any bit
 }
 
 int main()
@@ -143,6 +143,13 @@ int main()
   unsigned char H[crypto_core_ed25519_BYTES]; // suppose to store this somewhere in code (hard coded)
   generate_H(H);
 
-  scenario_1();
+  //scenario_1();
+
+  // test in to byte string 
+  int num = 17;
+  unsigned char input_1[crypto_core_ed25519_SCALARBYTES];
+  cout << "Printing out test int to byte" << endl;
+  int_to_scalar_byte(input_1, num);
+  print_hex(input_1, crypto_core_ed25519_SCALARBYTES);
   return 0;
 }

@@ -68,8 +68,8 @@ void generate_H(unsigned char *H)
 }
 
 // aGbH, where a and b are scalar, and G is the base point and B is the point
-void add_key(unsigned char *aGbH, unsigned char *a, unsigned char *b,
-             unsigned char *H)
+void add_key(unsigned char *aGbH, const unsigned char *a, const unsigned char *b,
+             const unsigned char *H)
 {
   unsigned char aG[crypto_scalarmult_ed25519_BYTES];
   unsigned char bH[crypto_scalarmult_ed25519_BYTES];
@@ -216,6 +216,14 @@ void scenario_2(const unsigned char *H)
   cout << "sum output commitment hex : " << endl;
   print_hex(test_sum_output_commitment, crypto_core_ed25519_BYTES);
   compare_byte(pseudo_output, test_sum_output_commitment, crypto_core_ed25519_BYTES);
+
+  cout << "==========================================" << endl;
+  // test the function add key
+  unsigned char xGaH[crypto_core_ed25519_BYTES];
+  add_key(xGaH, x, input_1_scalar, H);
+  cout << "test add key with xG + aH hex : " << endl;
+  print_hex(xGaH, crypto_core_ed25519_BYTES);
+  compare_byte(xGaH, pseudo_output, crypto_core_ed25519_BYTES);
 }
 
 int main()

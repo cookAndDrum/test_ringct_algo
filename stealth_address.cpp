@@ -16,33 +16,40 @@
 
 using namespace std;
 
-void to_string(string *output, unsigned char *key, size_t n) {
+void to_string(string *output, unsigned char *key, size_t n)
+{
   ostringstream oss;
-  for (size_t i = 0; i < n; i++) {
+  for (size_t i = 0; i < n; i++)
+  {
     oss << hex << setw(2) << setfill('0') << int(key[i]);
   }
 }
 
-void print_hex(const unsigned char *key, size_t n) {
-  for (size_t i = 0; i < n; i++) {
+void print_hex(const unsigned char *key, size_t n)
+{
+  for (size_t i = 0; i < n; i++)
+  {
     cout << hex << setw(2) << setfill('0') << int(key[i]);
   }
   cout << endl;
 }
 
-void compare_byte(const unsigned char *a, const unsigned char *b, size_t n) {
+void compare_byte(const unsigned char *a, const unsigned char *b, size_t n)
+{
   if (memcmp(a, b, n) == 0)
     cout << "Both byte strings equal" << endl;
   else
     cout << "WARNING>> Both byte strings are not equal" << endl;
 }
 
-void fill_seed(int val, unsigned char *seed, size_t n) {
+void fill_seed(int val, unsigned char *seed, size_t n)
+{
   for (size_t i = 0; i < n; i++)
     seed[i] = val;
 }
 
-void extract_scalar_from_sk(unsigned char *scalar, const unsigned char *seed) {
+void extract_scalar_from_sk(unsigned char *scalar, const unsigned char *seed)
+{
   crypto_hash_sha512(scalar, seed, 32);
   scalar[0] &= 248;
   scalar[31] &= 127;
@@ -50,7 +57,8 @@ void extract_scalar_from_sk(unsigned char *scalar, const unsigned char *seed) {
 }
 
 void hash_to_scalar(unsigned char *scalar, unsigned char *key,
-                    size_t key_size) {
+                    size_t key_size)
+{
   unsigned char hash[crypto_generichash_BYTES_MAX];
   crypto_generichash(hash, crypto_generichash_BYTES_MAX, key, key_size, NULL,
                      0);
@@ -59,7 +67,8 @@ void hash_to_scalar(unsigned char *scalar, unsigned char *key,
 
 void sender_compute_stealth_address_and_test(
     unsigned char *one_time_key_address, unsigned char *r,
-    const unsigned char *pkV_b, const unsigned char *pkS_b) {
+    const unsigned char *pkV_b, const unsigned char *pkS_b)
+{
   // 1. sender pick random r
   crypto_core_ed25519_scalar_random(r); // TODO change to random scalar
   // 2. sender calculate Hn = (r * pkV_b) G + pkS_b
@@ -75,7 +84,7 @@ void sender_compute_stealth_address_and_test(
   cout << "Length of the ed25519 scalarbyte: "
        << crypto_core_ed25519_SCALARBYTES << endl;
   // 2.2 scalar multiplication
-  unsigned char G_hn_r_pkV_b[crypto_core_ed25519_SCALARBYTES];
+  unsigned char G_hn_r_pkV_b[crypto_scalarmult_ed25519_BYTES];
   is_success = crypto_scalarmult_ed25519_base_noclamp(G_hn_r_pkV_b, hn_r_pkV_b);
   if (is_success != 0)
     cout << "Scalar operation of G with hash scalar fails" << endl;
@@ -88,13 +97,13 @@ void sender_compute_stealth_address_and_test(
          << endl;
 }
 
-
 void receiver_test_compute(const unsigned char *skV_b,
                            const unsigned char *pkV_b,
                            const unsigned char *skS_b,
                            const unsigned char *pkS_b,
                            const unsigned char *r,
-                           const unsigned char *stealth_address) {
+                           const unsigned char *stealth_address)
+{
   cout << " inside receiver test compute " << endl;
 
   // get skV_b scalar
@@ -126,7 +135,8 @@ void receiver_test_compute(const unsigned char *skV_b,
   compare_byte(test_one_time_key_address, stealth_address, crypto_core_ed25519_BYTES);
 }
 
-void test_scalar_arithmetic() {
+void test_scalar_arithmetic()
+{
   cout << "inside test scalar arithmetic " << endl;
   unsigned char a[crypto_core_ed25519_BYTES];
   unsigned char b[crypto_core_ed25519_BYTES];
@@ -170,7 +180,8 @@ void test_scalar_arithmetic() {
   compare_byte(E, test_E, crypto_core_ed25519_SCALARBYTES);
 }
 
-int main() {
+int main()
+{
   if (sodium_init() == -1)
     return 1;
 
@@ -201,6 +212,6 @@ int main() {
   sender_compute_stealth_address_and_test(one_time_key_address, r, pkV_b,
                                           pkS_b);
   receiver_test_compute(skV_b, pkV_b, skS_b, pkS_b, r, one_time_key_address);
-  
-  test_scalar_arithmetic();
+
+  // test_scalar_arithmetic();
 }

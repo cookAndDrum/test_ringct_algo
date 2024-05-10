@@ -352,8 +352,6 @@ void blsag_simple_gen(vector<array<unsigned char, 32>> &signature, unsigned char
             cerr << "Error: current index exceed n" << endl;
 
         // compute subsequent challenge
-        unsigned char rGcK[crypto_core_ed25519_BYTES];
-
         unsigned char ri_G_ci_Ki[crypto_core_ed25519_BYTES];
         unsigned char Hp_Ki[crypto_core_ed25519_BYTES];
         unsigned char ri_Hp_Ki_ci_Keyimage[crypto_core_ed25519_BYTES];
@@ -409,7 +407,7 @@ void blsag_simple_gen(vector<array<unsigned char, 32>> &signature, unsigned char
     }
 }
 
-void blsag_simple_verify(const vector<array<unsigned char, 32>> &signature, const unsigned char *key_image, const AddressPair &signer_ap, const User &signer, const vector<pair<User, AddressPair>> &decoy)
+void blsag_simple_verify(const vector<array<unsigned char, 32>> &signature, const unsigned char *key_image, const unsigned char *m, const AddressPair &signer_ap, const User &signer, const vector<pair<User, AddressPair>> &decoy)
 {
     cout << "BLSAG simple verify" << endl;
 
@@ -418,17 +416,67 @@ void blsag_simple_verify(const vector<array<unsigned char, 32>> &signature, cons
     int secret_index = 1;
     vector<pair<User, AddressPair>> all_members = {(decoy)[0], {signer, signer_ap}, (decoy)[1]};
 
-    unsigned char c_1[crypto_core_ed25519_SCALARBYTES];
-    copy(signature[0].begin(), signature[0].end(), c_1);
+    unsigned char received_c1[crypto_core_ed25519_SCALARBYTES];
+    copy(signature[0].begin(), signature[0].end(), received_c1);
     vector<array<unsigned char, crypto_core_ed25519_SCALARBYTES>> r(signature.begin() + 1, signature.end());
 
     cout << "c 1 " << endl;
-    print_hex(c_1, crypto_core_ed25519_SCALARBYTES);
+    print_hex(received_c1, crypto_core_ed25519_SCALARBYTES);
     cout << "r :" << endl;
     for (auto &r_i : r)
         print_hex(r_i.data(), crypto_core_ed25519_SCALARBYTES);
+    cout << endl;
 
     // TODO
+    int n = all_members.size();
+    int loop_counter = all_members.size();
+    int current_index = 0;
+    int challenge_index = current_index + 1 == n ? 0 : current_index + 1;
+    vector<array<unsigned char, crypto_core_ed25519_SCALARBYTES>> c(n);
+    c[0] = signature[0]; // have to use the provided c1, then compare it against computed c1
+
+    while (loop_counter > 0)
+    {
+        current_index = current_index == n ? 0 : current_index;
+        challenge_index = challenge_index == n ? 0 : challenge_index;
+
+        // compute every challenge
+        unsigned char ri_G_ci_Ki[crypto_core_ed25519_BYTES];
+        unsigned char Hp_Ki[crypto_core_ed25519_BYTES];
+        unsigned char ri_Hp_Ki_ci_Keyimage[crypto_core_ed25519_BYTES];
+
+        // 1. compute ri_G + ci_Ki
+        add_key(ri_G_ci_Ki, r[current_index].data(), c[current_index].data(), all_members[current_index].second.stealth_address);
+
+        // 2. compute ri_Hp_Ki + ci_Keyimage
+        hash_to_point(Hp_Ki, all_members[current_index].second.stealth_address, crypto_core_ed25519_BYTES);
+        add_key(ri_Hp_Ki_ci_Keyimage, r[current_index].data(), Hp_Ki, c[current_index].data(), key_image);
+
+        // 3. concatenate and hash to scalar
+        size_t total_length = 2 * crypto_core_ed25519_BYTES + crypto_core_ed25519_BYTES; // TODO: last one is the rand m length
+        vector<unsigned char> to_hash(total_length);
+        copy(m, m + crypto_core_ed25519_BYTES, to_hash.begin());
+        copy(ri_G_ci_Ki, ri_G_ci_Ki + crypto_core_ed25519_BYTES, to_hash.begin() + crypto_core_ed25519_BYTES);
+        copy(ri_Hp_Ki_ci_Keyimage, ri_Hp_Ki_ci_Keyimage + crypto_core_ed25519_BYTES, to_hash.begin() + 2 * crypto_core_ed25519_BYTES);
+
+        // on the last step compare if provided c_1 is equal to computed c_1
+        if (loop_counter == 1)
+        {
+            unsigned char computed_c1[crypto_core_ed25519_SCALARBYTES];
+            hash_to_scalar(computed_c1, to_hash.data(), total_length);
+            cout << "Computed c_1: " << endl;
+            print_hex(computed_c1, crypto_core_ed25519_SCALARBYTES);
+            cout << "Comparison received c_1 and computed c_1" << endl;
+            compare_byte(received_c1, computed_c1, crypto_core_ed25519_SCALARBYTES);
+        }
+        else
+            hash_to_scalar(c[challenge_index].data(), to_hash.data(), total_length);
+
+        // loop action
+        current_index++;
+        challenge_index++;
+        loop_counter--;
+    }
 }
 
 int main()
@@ -460,7 +508,7 @@ int main()
     blsag_simple_gen(signature, key_image, m, &bob_address_pair, &bob, &decoy);
     cout << "======================" << endl;
 
-    blsag_simple_verify(signature, key_image, bob_address_pair, bob, decoy);
+    blsag_simple_verify(signature, key_image, m, bob_address_pair, bob, decoy);
     cout << "======================" << endl;
 
     cout << "Size of various bytes: " << endl;

@@ -147,6 +147,25 @@ void add_key(unsigned char *aGbH, const unsigned char *a, const unsigned char *b
         cout << "point addition aG + bH fail due to invalid points" << endl;
 }
 
+// aKbH, where a and b are scalar, and K and B are the points
+void add_key(unsigned char *aKbH, const unsigned char *a, const unsigned char *K, const unsigned char *b,
+             const unsigned char *H)
+{
+    unsigned char aK[crypto_scalarmult_ed25519_BYTES];
+    unsigned char bH[crypto_scalarmult_ed25519_BYTES];
+
+    // check value, skip for now
+
+    int is_success_aK = crypto_scalarmult_ed25519_noclamp(aK, a, K);
+    int is_success_bH = crypto_scalarmult_ed25519_noclamp(bH, b, H);
+    if (is_success_aK != 0 || is_success_bH != 0)
+        cout << "scalar multiplication fail on aK or bH" << endl;
+
+    int is_success_add = crypto_core_ed25519_add(aKbH, aK, bH);
+    if (is_success_add != 0)
+        cout << "point addition aK + bH fail due to invalid points" << endl;
+}
+
 // input: the receiver public viewing key and public spending key
 // output: stealth_address (one time public key)  and r (transaction secret key)
 void compute_stealth_address(unsigned char *stealth_address, unsigned char *r,
@@ -229,11 +248,9 @@ void public_network_stealth_address_communication(AddressPair *receiver_address_
 // thus the index this sample construction serve no concealing purpose
 // the purpose of this is to prove the calculation is correct and could be verified
 // assume signer can access public key of all users only. Ignore it is struct for now
-void blsag_simple_gen(const AddressPair *signer_ap, const User *signer, const vector<pair<User, AddressPair>> *decoy)
+void blsag_simple_gen(vector<array<unsigned char, 32>> &signature, unsigned char *key_image, const unsigned char *m, const AddressPair *signer_ap, const User *signer, const vector<pair<User, AddressPair>> *decoy)
 {
-    // random m
-    unsigned char m[crypto_core_ed25519_BYTES];
-    crypto_core_ed25519_random(m);
+    cout << "BLSAG simple gen" << endl;
 
     // signer index = 1
     // decoy index = 0, 2
@@ -241,29 +258,44 @@ void blsag_simple_gen(const AddressPair *signer_ap, const User *signer, const ve
     vector<pair<User, AddressPair>> all_members = {(*decoy)[0], {*signer, *signer_ap}, (*decoy)[1]};
 
     // 1. compute key image
-    unsigned char key_image[crypto_core_ed25519_BYTES];
+    // unsigned char key_image[crypto_core_ed25519_BYTES];
     unsigned char Hp_stealth_address[crypto_core_ed25519_BYTES];
     hash_to_point(Hp_stealth_address, signer_ap->stealth_address, crypto_core_ed25519_BYTES);
     crypto_scalarmult_ed25519_noclamp(key_image, signer_ap->stealth_address_secretkey, Hp_stealth_address);
+
+    cout << "Compute Key image: " << endl;
+    print_hex(key_image, crypto_core_ed25519_BYTES);
+    cout << endl;
 
     // 2.1 generate random alpha (scalar) for the ring signature
     unsigned char alpha[crypto_core_ed25519_SCALARBYTES];
     crypto_core_ed25519_scalar_random(alpha);
 
+    cout << "Generating random Alpha: " << endl;
+    print_hex(alpha, crypto_core_ed25519_SCALARBYTES);
+    cout << endl;
+
     // 2.2 generate random r_i for each i except the secret index
-    vector<array<unsigned char, crypto_core_ed25519_SCALARBYTES>> r;
+    vector<array<unsigned char, crypto_core_ed25519_SCALARBYTES>> r(all_members.size()); // ady initialised
     for (int i = 0; i < all_members.size(); i++)
     {
         if (i == secret_index)
-            r.emplace_back(); // use this to simulate null, push empty array (initialised)
+            continue; // use this to simulate null
         else
         {
-            // use quite alot space
             array<unsigned char, crypto_core_ed25519_SCALARBYTES> r_i;
             crypto_core_ed25519_scalar_random(r_i.data());
-            r.push_back(r_i);
+            r[i] = r_i;
         }
     }
+
+    int r_index = 0;
+    for (auto &r_i : r)
+    {
+        cout << "Random r" << r_index++ << ": " << endl;
+        print_hex(r_i.data(), crypto_core_ed25519_SCALARBYTES);
+    }
+    cout << endl;
 
     // 3. compute initial challenge, i = secret index, c_pi_+1 = H(m || alpha_G || alpha_Hp_stealth_address)
     unsigned char c_initial[crypto_core_ed25519_SCALARBYTES];
@@ -275,7 +307,7 @@ void blsag_simple_gen(const AddressPair *signer_ap, const User *signer, const ve
     hash_to_point(Hp_stealth_address, all_members[secret_index].second.stealth_address, crypto_core_ed25519_BYTES);
     crypto_scalarmult_ed25519_noclamp(alpha_Hp_stealth_address, alpha, Hp_stealth_address);
 
-    size_t total_length = 2 * crypto_core_ed25519_BYTES + crypto_core_ed25519_BYTES; // last one is the rand m length
+    size_t total_length = 2 * crypto_core_ed25519_BYTES + crypto_core_ed25519_BYTES; // TODO: last one is the rand m length
     vector<unsigned char> to_hash(total_length);
     copy(m, m + crypto_core_ed25519_BYTES, to_hash.begin());
     copy(alpha_G, alpha_G + crypto_core_ed25519_BYTES, to_hash.begin() + crypto_core_ed25519_BYTES);
@@ -287,29 +319,116 @@ void blsag_simple_gen(const AddressPair *signer_ap, const User *signer, const ve
     array<unsigned char, crypto_core_ed25519_SCALARBYTES> c_initial_arr;
     memcpy(c_initial_arr.data(), c_initial, crypto_core_ed25519_SCALARBYTES);
 
+    int n = all_members.size();
+    int challenge_index = secret_index + 1 == n ? 0 : secret_index + 1;
+    int current_index = secret_index;
+    vector<array<unsigned char, crypto_core_ed25519_SCALARBYTES>>
+        c(n);
+
+    if (secret_index >= n)
+        cerr << "Error: secret index out of bound of n" << endl;
+    c[challenge_index++] = c_initial_arr;
+    current_index++;
+
+    cout << "Initial challenge, i = 1, c_i = 2: " << endl;
+    print_hex(c[2].data(), crypto_core_ed25519_SCALARBYTES);
+
     // 4. compute c_i for each i
     // pair.first is the index, pair.second is the challenge
-    vector<pair<int, array<unsigned char, crypto_core_ed25519_SCALARBYTES>>> c;
-    c.push_back({secret_index, c_initial_arr});
-
-    int n = all_members.size();
-    int current_index = secret_index + 1;
     while (n > 0)
     {
-        // action
-        unsigned char rGcK[crypto_core_ed25519_BYTES];
-
-        // TODO need to structure a way to do this
-        // add_key(rGcK, r[current_index].data(), )
-
-        // loop action
-        current_index++;
-        if (current_index == secret_index)
-            break;
+        // if secret index is the last one
+        if (challenge_index == n)
+            challenge_index = 0;
 
         if (current_index == n)
             current_index = 0;
+
+        // TODO when does it stop, is it challenge index  or member index???
+        if (current_index == secret_index)
+            break;
+
+        if (challenge_index > n)
+            cerr << "Error: current index exceed n" << endl;
+
+        // compute subsequent challenge
+        unsigned char rGcK[crypto_core_ed25519_BYTES];
+
+        unsigned char ri_G_ci_Ki[crypto_core_ed25519_BYTES];
+        unsigned char Hp_Ki[crypto_core_ed25519_BYTES];
+        unsigned char ri_Hp_Ki_ci_Keyimage[crypto_core_ed25519_BYTES];
+
+        // 1. compute ri_G + ci_Ki
+        add_key(ri_G_ci_Ki, r[current_index].data(), c[current_index].data(), all_members[current_index].second.stealth_address);
+
+        // 2. compute ri_Hp_Ki + ci_Keyimage
+        hash_to_point(Hp_Ki, all_members[current_index].second.stealth_address, crypto_core_ed25519_BYTES);
+        add_key(ri_Hp_Ki_ci_Keyimage, r[current_index].data(), Hp_Ki, c[current_index].data(), key_image);
+
+        // 3. concatenate and hash to scalar
+        size_t total_length = 2 * crypto_core_ed25519_BYTES + crypto_core_ed25519_BYTES; // TODO: last one is the rand m length
+        vector<unsigned char> to_hash(total_length);
+        copy(m, m + crypto_core_ed25519_BYTES, to_hash.begin());
+        copy(ri_G_ci_Ki, ri_G_ci_Ki + crypto_core_ed25519_BYTES, to_hash.begin() + crypto_core_ed25519_BYTES);
+        copy(ri_Hp_Ki_ci_Keyimage, ri_Hp_Ki_ci_Keyimage + crypto_core_ed25519_BYTES, to_hash.begin() + 2 * crypto_core_ed25519_BYTES);
+        hash_to_scalar(c[challenge_index].data(), to_hash.data(), total_length);
+
+        // loop action
+        current_index++;
+        challenge_index++;
     }
+
+    int j = 0;
+    for (auto &c_i : c)
+    {
+        cout << "Challenge " << j << ": " << endl;
+        print_hex(c_i.data(), crypto_core_ed25519_SCALARBYTES);
+        j++;
+    }
+    cout << endl;
+
+    // 5. define real response r_secret_index = alpha - c_secret_index * sk_secret_index mod l
+    unsigned char c_stealth_address_secretkey[crypto_core_ed25519_SCALARBYTES];
+    crypto_core_ed25519_scalar_mul(c_stealth_address_secretkey, c[secret_index].data(), all_members[secret_index].second.stealth_address_secretkey);
+    crypto_core_ed25519_scalar_sub(r[secret_index].data(), alpha, c_stealth_address_secretkey);
+
+    int k = 0;
+    for (auto &r_i : r)
+    {
+        cout << "Response r: " << k++ << endl;
+        print_hex(r_i.data(), crypto_core_ed25519_SCALARBYTES);
+    }
+    cout << endl;
+
+    // 6. publish the ring
+    signature[0] = c[0];
+    copy(r.begin(), r.end(), signature.begin() + 1);
+    for (auto &c : signature)
+    {
+        print_hex(c.data(), crypto_core_ed25519_SCALARBYTES);
+    }
+}
+
+void blsag_simple_verify(const vector<array<unsigned char, 32>> &signature, const unsigned char *key_image, const AddressPair &signer_ap, const User &signer, const vector<pair<User, AddressPair>> &decoy)
+{
+    cout << "BLSAG simple verify" << endl;
+
+    // signer index = 1
+    // decoy index = 0, 2
+    int secret_index = 1;
+    vector<pair<User, AddressPair>> all_members = {(decoy)[0], {signer, signer_ap}, (decoy)[1]};
+
+    unsigned char c_1[crypto_core_ed25519_SCALARBYTES];
+    copy(signature[0].begin(), signature[0].end(), c_1);
+    vector<array<unsigned char, crypto_core_ed25519_SCALARBYTES>> r(signature.begin() + 1, signature.end());
+
+    cout << "c 1 " << endl;
+    print_hex(c_1, crypto_core_ed25519_SCALARBYTES);
+    cout << "r :" << endl;
+    for (auto &r_i : r)
+        print_hex(r_i.data(), crypto_core_ed25519_SCALARBYTES);
+
+    // TODO
 }
 
 int main()
@@ -328,11 +447,21 @@ int main()
     public_network_stealth_address_communication(&charlie_address_pair, &charlie, &alice);
     public_network_stealth_address_communication(&danice_address_pair, &danice, &alice);
 
+    cout << "======================" << endl;
     // for ring construction, let's put the m as random first
     // bob is the signer
+    // random m
+    unsigned char m[crypto_core_ed25519_BYTES];
+    crypto_core_ed25519_random(m);
     vector<pair<User, AddressPair>> decoy = {{charlie, charlie_address_pair}, {danice, danice_address_pair}};
+    vector<array<unsigned char, 32>> signature(4); // 1 challenge, 3 responses
+    unsigned char key_image[crypto_core_ed25519_BYTES];
 
-    blsag_simple_gen(&bob_address_pair, &bob, &decoy);
+    blsag_simple_gen(signature, key_image, m, &bob_address_pair, &bob, &decoy);
+    cout << "======================" << endl;
+
+    blsag_simple_verify(signature, key_image, bob_address_pair, bob, decoy);
+    cout << "======================" << endl;
 
     cout << "Size of various bytes: " << endl;
     cout << crypto_core_ed25519_BYTES << endl;

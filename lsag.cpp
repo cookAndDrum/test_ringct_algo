@@ -415,7 +415,8 @@ void blsag_simple_verify(const vector<array<unsigned char, 32>> &signature, cons
     // signer index = 1
     // decoy index = 0, 2
     int secret_index = 1;
-    vector<pair<User, AddressPair>> all_members = {(decoy)[0], {signer, signer_ap}, (decoy)[1]};
+    // vector<pair<User, AddressPair>> all_members = {(decoy)[0], {signer, signer_ap}, (decoy)[1]};
+    vector<pair<User, AddressPair>> all_members = decoy;
 
     unsigned char received_c1[crypto_core_ed25519_SCALARBYTES];
     copy(signature[0].begin(), signature[0].end(), received_c1);
@@ -502,7 +503,7 @@ int main()
     // random m
     unsigned char m[crypto_core_ed25519_BYTES];
     crypto_core_ed25519_random(m);
-    vector<pair<User, AddressPair>> decoy = {{charlie, charlie_address_pair}, {danice, danice_address_pair}};
+    vector<pair<User, AddressPair>> decoy = {{charlie, charlie_address_pair}, {bob, bob_address_pair}, {danice, danice_address_pair}};
     vector<array<unsigned char, 32>> signature(4); // 1 challenge, 3 responses
     unsigned char key_image[crypto_core_ed25519_BYTES];
 
@@ -521,19 +522,19 @@ int main()
     // scale up
     cout << "======================" << endl;
     User CA;
-    vector<User> users(11);
-    vector<AddressPair> address_pairs(11);
-    for (int i = 0; i < 11; i++)
+    vector<User> users(100);
+    vector<AddressPair> address_pairs(100);
+    for (int i = 0; i < 100; i++)
         public_network_stealth_address_communication(&address_pairs[i], &users[i], &CA);
 
-    vector<pair<User, AddressPair>> decoy_11;
-    for (int i = 0; i < 11; i++)
-        decoy_11.push_back({users[i], address_pairs[i]});
+    vector<pair<User, AddressPair>> decoy_100;
+    for (int i = 0; i < 100; i++)
+        decoy_100.push_back({users[i], address_pairs[i]});
 
-    vector<array<unsigned char, 32>> signature_11(12);
-    unsigned char key_image_11[crypto_core_ed25519_BYTES];
+    vector<array<unsigned char, 32>> signature_100(101); // must + 1 for challenge
+    unsigned char key_image_100[crypto_core_ed25519_BYTES];
     cout << "======================" << endl;
-    blsag_simple_gen(signature_11, key_image_11, m, &address_pairs[1], &users[1], &decoy_11);
+    blsag_simple_gen(signature_100, key_image_100, m, &address_pairs[1], &users[1], &decoy_100);
     cout << "======================" << endl;
-    blsag_simple_verify(signature_11, key_image_11, m, address_pairs[1], users[1], decoy_11);
+    blsag_simple_verify(signature_100, key_image_100, m, address_pairs[1], users[1], decoy_100);
 }

@@ -255,7 +255,8 @@ void blsag_simple_gen(vector<array<unsigned char, 32>> &signature, unsigned char
     // signer index = 1
     // decoy index = 0, 2
     int secret_index = 1;
-    vector<pair<User, AddressPair>> all_members = {(*decoy)[0], {*signer, *signer_ap}, (*decoy)[1]};
+    // vector<pair<User, AddressPair>> all_members = {(*decoy)[0], {*signer, *signer_ap}, (*decoy)[1]};
+    vector<pair<User, AddressPair>> all_members = *decoy;
 
     // 1. compute key image
     // unsigned char key_image[crypto_core_ed25519_BYTES];
@@ -516,4 +517,23 @@ int main()
     cout << crypto_scalarmult_curve25519_BYTES << endl;
     cout << crypto_core_ed25519_SCALARBYTES << endl;
     cout << crypto_scalarmult_curve25519_SCALARBYTES << endl;
+
+    // scale up
+    cout << "======================" << endl;
+    User CA;
+    vector<User> users(11);
+    vector<AddressPair> address_pairs(11);
+    for (int i = 0; i < 11; i++)
+        public_network_stealth_address_communication(&address_pairs[i], &users[i], &CA);
+
+    vector<pair<User, AddressPair>> decoy_11;
+    for (int i = 0; i < 11; i++)
+        decoy_11.push_back({users[i], address_pairs[i]});
+
+    vector<array<unsigned char, 32>> signature_11(12);
+    unsigned char key_image_11[crypto_core_ed25519_BYTES];
+    cout << "======================" << endl;
+    blsag_simple_gen(signature_11, key_image_11, m, &address_pairs[1], &users[1], &decoy_11);
+    cout << "======================" << endl;
+    blsag_simple_verify(signature_11, key_image_11, m, address_pairs[1], users[1], decoy_11);
 }
